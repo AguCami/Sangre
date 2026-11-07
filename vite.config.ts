@@ -3,7 +3,10 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
+// base: ruta donde se sirve la app. En GitHub Pages de un repo "Sangre" es
+// "/Sangre/". Para correr en la raíz (dev, otro hosting) poné "/".
 export default defineConfig({
+  base: '/Sangre/',
   plugins: [
     react(),
     VitePWA({
@@ -17,8 +20,6 @@ export default defineConfig({
         background_color: '#0f0f12',
         display: 'standalone',
         orientation: 'any',
-        start_url: '/',
-        scope: '/',
         lang: 'es',
         icons: [
           {

@@ -113,8 +113,8 @@ export function Login() {
       <video
         ref={videoRef}
         className="login__video"
-        poster="/login-poster.jpg"
-        src="/login-bg.mp4"
+        poster={`${import.meta.env.BASE_URL}login-poster.jpg`}
+        src={`${import.meta.env.BASE_URL}login-bg.mp4`}
         muted
         playsInline
         preload="auto"
