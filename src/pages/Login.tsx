@@ -9,11 +9,11 @@ import { useAuth } from '../auth/AuthContext'
 import './Login.css'
 
 /**
- * Momento (en segundos del video) en que la gota pasa por la mitad del
- * recorrido. Ahí revelamos el formulario, como si "emergiera" de la gota.
- * La gota se desprende ~1.0s e impacta ~2.4s → la mitad cae cerca de 1.5s.
+ * Momento (en segundos del video) en que la gota está a mitad de camino,
+ * centrada y nítida. Ahí congelamos el video y, sobre esa misma gota del
+ * fondo, aparecen los campos del login (sin marco ni dibujo extra).
  */
-const TIEMPO_REVELADO = 1.5
+const TIEMPO_CONGELADO = 1.5
 
 /** Si el video no puede autoreproducirse, igual mostramos el login. */
 const FALLBACK_MS = 2600
@@ -36,36 +36,62 @@ export function Login() {
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const mostrarFormulario = useCallback(() => setRevelar(true), [])
+  // Congela la gota del fondo a mitad de camino y muestra los campos encima.
+  const congelarGota = useCallback(() => {
+    const video = videoRef.current
+    if (video) {
+      try {
+        video.pause()
+        // Fijamos el frame exacto para que la gota quede siempre igual.
+        if (Math.abs(video.currentTime - TIEMPO_CONGELADO) > 0.08) {
+          video.currentTime = TIEMPO_CONGELADO
+        }
+      } catch {
+        /* no-op */
+      }
+    }
+    setRevelar(true)
+  }, [])
 
-  // Sincroniza el revelado con la caída de la gota (o lo fuerza si no hay video).
   useEffect(() => {
     if (prefiereMenosMovimiento()) {
-      mostrarFormulario()
+      // Sin animación: mostramos directamente la gota congelada.
+      const video = videoRef.current
+      if (video) {
+        const fijar = () => {
+          try {
+            video.currentTime = TIEMPO_CONGELADO
+          } catch {
+            /* no-op */
+          }
+        }
+        if (video.readyState >= 1) fijar()
+        else video.addEventListener('loadedmetadata', fijar, { once: true })
+      }
+      setRevelar(true)
       return
     }
 
-    const fallback = window.setTimeout(mostrarFormulario, FALLBACK_MS)
+    const fallback = window.setTimeout(congelarGota, FALLBACK_MS)
 
     const video = videoRef.current
     if (video) {
       video.muted = true
       const intento = video.play()
       if (intento && typeof intento.catch === 'function') {
-        // Autoplay bloqueado → mostramos el login igual.
-        intento.catch(() => mostrarFormulario())
+        intento.catch(() => congelarGota())
       }
     }
 
     return () => window.clearTimeout(fallback)
-  }, [mostrarFormulario])
+  }, [congelarGota])
 
   const handleTimeUpdate = useCallback(() => {
     const video = videoRef.current
-    if (video && video.currentTime >= TIEMPO_REVELADO) {
-      setRevelar(true)
+    if (video && video.currentTime >= TIEMPO_CONGELADO) {
+      congelarGota()
     }
-  }, [])
+  }, [congelarGota])
 
   const handleSubmit = useCallback(
     async (e: FormEvent) => {
@@ -78,13 +104,12 @@ export function Login() {
         setError(res.error ?? 'No se pudo iniciar sesión.')
         setEnviando(false)
       }
-      // Si ok, el AuthProvider cambia la vista; no hace falta apagar "enviando".
     },
     [email, password, enviando, iniciarSesion],
   )
 
   return (
-    <div className="login">
+    <div className={`login ${revelar ? 'login--revelado' : ''}`}>
       <video
         ref={videoRef}
         className="login__video"
@@ -95,106 +120,101 @@ export function Login() {
         preload="auto"
         autoPlay
         onTimeUpdate={handleTimeUpdate}
-        onEnded={() => setRevelar(true)}
-        onError={mostrarFormulario}
-      />
-
-      {/* Oscurecido para legibilidad, se intensifica al aparecer el login */}
-      <div
-        className={`login__velo ${revelar ? 'login__velo--activo' : ''}`}
-        aria-hidden="true"
+        onEnded={congelarGota}
+        onError={congelarGota}
       />
 
       <header className="login__marca">
-        <span className="login__gota" aria-hidden="true" />
+        <span className="login__marca-gota" aria-hidden="true" />
         <span className="login__marca-texto">Sangre</span>
       </header>
 
-      <main className="login__centro">
-        <form
-          className={`tarjeta ${revelar ? 'tarjeta--visible' : ''}`}
-          onSubmit={handleSubmit}
-          noValidate
-          // Oculto para lectores de pantalla y teclado hasta que se revela
-          aria-hidden={!revelar}
+      {/* Campos del login, centrados sobre la gota del fondo */}
+      <form
+        className={`acceso ${revelar ? 'acceso--visible' : ''}`}
+        onSubmit={handleSubmit}
+        noValidate
+        aria-hidden={!revelar}
+      >
+        <label className="campo">
+          <span className="sr-only">Email</span>
+          <input
+            className="campo__input"
+            type="email"
+            name="email"
+            inputMode="email"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="Email"
+            aria-label="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={enviando}
+            tabIndex={revelar ? 0 : -1}
+            required
+          />
+        </label>
+
+        <label className="campo campo--pass">
+          <span className="sr-only">Contraseña</span>
+          <input
+            className="campo__input"
+            type={verPass ? 'text' : 'password'}
+            name="password"
+            autoComplete="current-password"
+            placeholder="Contraseña"
+            aria-label="Contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={enviando}
+            tabIndex={revelar ? 0 : -1}
+            required
+          />
+          <button
+            type="button"
+            className="campo__ver"
+            onClick={() => setVerPass((v) => !v)}
+            aria-label={verPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            tabIndex={revelar ? 0 : -1}
+          >
+            {verPass ? 'Ocultar' : 'Ver'}
+          </button>
+        </label>
+
+        <button
+          className="boton"
+          type="submit"
+          disabled={enviando}
+          tabIndex={revelar ? 0 : -1}
         >
-          <div className="tarjeta__brillo" aria-hidden="true" />
-
-          <h1 className="tarjeta__titulo">Ingresá a tu cuenta</h1>
-          <p className="tarjeta__subtitulo">Hemoterapia · acceso profesional</p>
-
-          <label className="campo">
-            <span className="campo__label">Email</span>
-            <input
-              className="campo__input"
-              type="email"
-              name="email"
-              inputMode="email"
-              autoComplete="username"
-              autoCapitalize="none"
-              spellCheck={false}
-              placeholder="nombre@institucion.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={enviando}
-              required
-            />
-          </label>
-
-          <label className="campo">
-            <span className="campo__label">Contraseña</span>
-            <div className="campo__pass">
-              <input
-                className="campo__input"
-                type={verPass ? 'text' : 'password'}
-                name="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={enviando}
-                required
-              />
-              <button
-                type="button"
-                className="campo__ver"
-                onClick={() => setVerPass((v) => !v)}
-                aria-label={verPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                tabIndex={revelar ? 0 : -1}
-              >
-                {verPass ? 'Ocultar' : 'Ver'}
-              </button>
-            </div>
-          </label>
-
-          {error && (
-            <p className="tarjeta__error" role="alert">
-              {error}
-            </p>
+          {enviando ? (
+            <>
+              <span className="boton__spinner" aria-hidden="true" />
+              Ingresando…
+            </>
+          ) : (
+            'Entrar'
           )}
+        </button>
 
-          <button className="boton" type="submit" disabled={enviando}>
-            {enviando ? (
-              <>
-                <span className="boton__spinner" aria-hidden="true" />
-                Ingresando…
-              </>
-            ) : (
-              'Ingresar'
-            )}
-          </button>
+        {error && (
+          <p className="acceso__error" role="alert">
+            {error}
+          </p>
+        )}
+      </form>
 
-          <button type="button" className="tarjeta__link" tabIndex={revelar ? 0 : -1}>
-            ¿Olvidaste tu contraseña?
-          </button>
-
-          {modoDemo && (
-            <p className="tarjeta__demo">
-              Modo demo · cualquier email válido y contraseña de 6+ caracteres
-            </p>
-          )}
-        </form>
-      </main>
+      <div className={`login__pie ${revelar ? 'login__pie--visible' : ''}`}>
+        <button type="button" className="login__link" tabIndex={revelar ? 0 : -1}>
+          ¿Olvidaste tu contraseña?
+        </button>
+        {modoDemo && (
+          <p className="login__demo">
+            Modo demo · email válido y contraseña de 6+ caracteres
+          </p>
+        )}
+      </div>
     </div>
   )
 }

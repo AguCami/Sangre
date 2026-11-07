@@ -1,9 +1,9 @@
 # Sangre · App de Hemoterapia
 
 Web app (PWA) pensada para usarse en **tablet**, con acceso a **cámara**. Esta
-primera entrega incluye la **pantalla de login** con un fondo animado (la gota
-de sangre que cae) y el formulario que emerge cuando la gota pasa por la mitad
-del recorrido.
+primera entrega incluye la **pantalla de login**: la gota de sangre cae (video
+de fondo), se **congela a mitad de camino** y los campos del login aparecen
+centrados **sobre esa misma gota** (sin marco ni recuadro).
 
 ## Stack
 
@@ -61,12 +61,12 @@ public/
 src/
   auth/               Contexto de auth + modo maqueta (Supabase enchufable)
   lib/supabase.ts     Cliente de Supabase
-  pages/Login.tsx     Login con video + revelado sincronizado a la gota
+  pages/Login.tsx     Login: congela la gota del video y pone los campos encima
   pages/Home.tsx      Pantalla post-login + prueba de cámara
 ```
 
-El revelado del formulario se sincroniza con el video en
-`src/pages/Login.tsx` (constante `TIEMPO_REVELADO`, ~1.5s = mitad de la caída).
+El momento en que la gota se congela se ajusta en `src/pages/Login.tsx`
+(constante `TIEMPO_CONGELADO`, ~1.5s = mitad de la caída).
 
 ## Próximos pasos
 
